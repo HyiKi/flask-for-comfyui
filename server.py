@@ -1,5 +1,7 @@
+from math import e
 from flask import Flask, request
 import sys
+import traceback
 
 # This is an example that uses the websockets api and the SaveImageWebsocket node to get images directly without
 # them being saved to disk
@@ -40,16 +42,21 @@ def handler():
     body = json.loads(request_body)
 
     # do something here
-    prompt_text = body["prompt"]
-    prompt = json.loads(prompt_text)
+    try :
+        prompt_text = body["prompt"]
+        node_id = body["node_id"]
 
-    ws = websocket.WebSocket()
-    ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
-    images = get_images(ws, prompt)
+        prompt = json.loads(prompt_text)
+
+        ws = websocket.WebSocket()
+        ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
+        images = get_images(ws, prompt)
+        output_images = images[node_id]
+    except Exception as e:
+        return traceback.format_exception_only(type(e), e)[0], 400, {"Content-Type": "text/plain"}
 
     sys.stdout.flush()
-    return render(str(images)), 200, {}
-
+    return render(output_images), 200, {"Content-Type": "application/json"}
 
 def render(data):
     result_dict = {}
@@ -102,7 +109,7 @@ def get_images(ws, prompt):
     for o in history["outputs"]:
         for node_id in history["outputs"]:
             node_output = history["outputs"][node_id]
-            if "images" in node_output and node_id == '86' :
+            if "images" in node_output:
                 images_output = []
                 for image in node_output["images"]:
                     image_data = get_image(
