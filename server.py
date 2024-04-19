@@ -1,5 +1,6 @@
 from flask import Flask, request
 import sys
+
 # This is an example that uses the websockets api and the SaveImageWebsocket node to get images directly without
 # them being saved to disk
 
@@ -8,8 +9,10 @@ import uuid
 import json
 import urllib.request
 import urllib.parse
+import base64
 
-server_address = "127.0.0.1:18188"
+# server_address = "175.168.12.58:18188"
+server_address = "220.168.146.21:8309"
 client_id = str(uuid.uuid4())
 
 app = Flask(__name__)
@@ -28,12 +31,12 @@ def handler():
     content_type = request.content_type
     query_string = request.query_string.decode("utf-8")
 
-    print("request_body: {}".format(request_body))
-    print(
-        "method: {} path: {} query_string: {}".format(
-            request_method, path_info, query_string
-        )
-    )
+    # print("request_body: {}".format(request_body))
+    # print(
+    #     "method: {} path: {} query_string: {}".format(
+    #         request_method, path_info, query_string
+    #     )
+    # )
     body = json.loads(request_body)
 
     # do something here
@@ -45,7 +48,8 @@ def handler():
     images = get_images(ws, prompt)
 
     sys.stdout.flush()
-    return render(images), 200, {"Content-type", "application/json;charset=utf-8"}
+    return render(str(images)), 200, {}
+
 
 def render(data):
     result_dict = {}
@@ -53,6 +57,7 @@ def render(data):
     result_dict["msg"] = "success"
     result_dict["data"] = data
     return json.dumps(result_dict)
+
 
 def queue_prompt(prompt):
     p = {"prompt": prompt, "client_id": client_id}
@@ -80,114 +85,38 @@ def get_history(prompt_id):
 def get_images(ws, prompt):
     prompt_id = queue_prompt(prompt)["prompt_id"]
     output_images = {}
-    current_node = ""
     while True:
         out = ws.recv()
+        print("Output: " + str(out))
         if isinstance(out, str):
             message = json.loads(out)
             if message["type"] == "executing":
                 data = message["data"]
-                if data["prompt_id"] == prompt_id:
-                    if data["node"] is None:
-                        break  # Execution is done
-                    else:
-                        current_node = data["node"]
+                if data["node"] is None and data["prompt_id"] == prompt_id:
+                    break  # Execution is done
         else:
-            if current_node == "save_image_websocket_node":
-                images_output = output_images.get(current_node, [])
-                images_output.append(out[8:])
-                output_images[current_node] = images_output
+            continue  # previews are binary data
+
+    history = get_history(prompt_id)[prompt_id]
+    print("history: " + str(history))
+    for o in history["outputs"]:
+        for node_id in history["outputs"]:
+            node_output = history["outputs"][node_id]
+            if "images" in node_output and node_id == '86' :
+                images_output = []
+                for image in node_output["images"]:
+                    image_data = get_image(
+                        image["filename"], image["subfolder"], image["type"]
+                    )
+                    # 将二进制数据编码为 base64
+                    base64_data = base64.b64encode(image_data)
+
+                    # 将 base64 数据转换为字符串（如果需要）
+                    base64_string = base64_data.decode('utf-8')
+                    images_output.append(base64_string)
+                output_images[node_id] = images_output
 
     return output_images
-
-
-prompt_text = """
-{
-    "3": {
-        "class_type": "KSampler",
-        "inputs": {
-            "cfg": 8,
-            "denoise": 1,
-            "latent_image": [
-                "5",
-                0
-            ],
-            "model": [
-                "4",
-                0
-            ],
-            "negative": [
-                "7",
-                0
-            ],
-            "positive": [
-                "6",
-                0
-            ],
-            "sampler_name": "euler",
-            "scheduler": "normal",
-            "seed": 8566257,
-            "steps": 20
-        }
-    },
-    "4": {
-        "class_type": "CheckpointLoaderSimple",
-        "inputs": {
-            "ckpt_name": "v1-5-pruned-emaonly.ckpt"
-        }
-    },
-    "5": {
-        "class_type": "EmptyLatentImage",
-        "inputs": {
-            "batch_size": 1,
-            "height": 512,
-            "width": 512
-        }
-    },
-    "6": {
-        "class_type": "CLIPTextEncode",
-        "inputs": {
-            "clip": [
-                "4",
-                1
-            ],
-            "text": "masterpiece best quality girl"
-        }
-    },
-    "7": {
-        "class_type": "CLIPTextEncode",
-        "inputs": {
-            "clip": [
-                "4",
-                1
-            ],
-            "text": "bad hands"
-        }
-    },
-    "8": {
-        "class_type": "VAEDecode",
-        "inputs": {
-            "samples": [
-                "3",
-                0
-            ],
-            "vae": [
-                "4",
-                2
-            ]
-        }
-    },
-    "save_image_websocket_node": {
-        "class_type": "SaveImageWebsocket",
-        "inputs": {
-            "images": [
-                "8",
-                0
-            ]
-        }
-    }
-}
-"""
 
 # Commented out code to display the output images:
 
