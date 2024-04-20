@@ -1,4 +1,3 @@
-from math import e
 from flask import Flask, request
 import sys
 import traceback
@@ -13,8 +12,8 @@ import urllib.request
 import urllib.parse
 import base64
 
-# server_address = "175.168.12.58:18188"
-server_address = "220.168.146.21:8309"
+# set your server address here
+server_address = ""
 client_id = str(uuid.uuid4())
 
 app = Flask(__name__)
@@ -94,7 +93,7 @@ def get_images(ws, prompt):
     output_images = {}
     while True:
         out = ws.recv()
-        print("Output: " + str(out))
+        # print("Output: " + str(out))
         if isinstance(out, str):
             message = json.loads(out)
             if message["type"] == "executing":
@@ -105,7 +104,7 @@ def get_images(ws, prompt):
             continue  # previews are binary data
 
     history = get_history(prompt_id)[prompt_id]
-    print("history: " + str(history))
+    # print("history: " + str(history))
     for o in history["outputs"]:
         for node_id in history["outputs"]:
             node_output = history["outputs"][node_id]
